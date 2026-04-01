@@ -1,0 +1,604 @@
+================================================================================
+                    PRODUCT REQUIREMENTS DOCUMENT (PRD)
+                    SIPERTI - Sistem Informasi Penyakit Real Time
+                    Puskesmas Kalijudan
+================================================================================
+
+VERSION: 1.0.3
+DATE: March 30, 2026
+STATUS: Production Ready
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. Executive Summary
+2. Background & Objectives
+3. User Personas
+4. Features Overview
+5. Technical Architecture
+6. Data Structure
+7. Metrics & Analytics
+8. Security Requirements
+9. UI/UX Requirements
+10. Browser Support
+11. Roadmap
+12. Constraints & Assumptions
+13. Acceptance Criteria
+14. Contact & Support
+15. Version History
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+Product Name      : SIPERTI (Sistem Informasi Penyakit Real Time)
+Client            : Puskesmas Kalijudan, Kecamatan Mulyorejo
+Application Type  : Web-based Health Information System
+Platform          : Browser (Desktop & Mobile)
+Status            : Production Ready
+Version           : 1.0.0
+
+================================================================================
+2. BACKGROUND & OBJECTIVES
+================================================================================
+
+PROBLEM STATEMENT:
+------------------
+- Manual and scattered disease case recording
+- Difficulty monitoring disease spread in real-time
+- No easy-to-understand data visualization
+- Slow report generation for health department
+
+SOLUTION:
+---------
+SIPERTI provides a digital system for:
+- Centralized disease case data input
+- Real-time visualization through dashboard and interactive map
+- Data export for reporting
+- Monthly disease trend monitoring
+
+================================================================================
+3. USER PERSONAS
+================================================================================
+
+PERSONA 1: Admin Puskesmas
+--------------------------
+Profile: Administrative staff of Puskesmas Kalijudan
+
+Needs:
+- Input new case data (DBD, Hepatitis, Diare, TBC)
+- View daily/weekly/monthly statistics
+- Export data for health department reports
+- Manage data (edit/delete)
+
+Goal: Efficiency in reporting and data accuracy
+
+
+PERSONA 2: Guest User
+---------------------
+Profile: Visitor who wants to view dashboard without full access
+
+Needs:
+- View-only access to dashboard
+- View statistics and distribution map
+- Cannot input/edit data
+
+Goal: Quick information without login
+
+================================================================================
+4. FEATURES OVERVIEW
+================================================================================
+
+4.1 AUTHENTICATION & AUTHORIZATION
+----------------------------------
++------------------+------------------------------------------+----------+
+| Feature          | Description                              | Priority |
++------------------+------------------------------------------+----------+
+| Login Page       | Username/password authentication         | P0       |
+| Guest Access     | Dashboard view without login             | P1       |
+| Forgot Password  | Reset via security question              | P2       |
+| Session Mgmt     | Auto-logout after inactive               | P2       |
++------------------+------------------------------------------+----------+
+
+Default Credentials:
+- Username: admin
+- Password: admin123
+
+
+4.2 DASHBOARD
+-------------
++------------------+------------------------------------------+----------+
+| Component        | Description                              | Priority |
++------------------+------------------------------------------+----------+
+| Stat Cards       | 4 cards (DBD, Hepatitis, Diare, TBC)     | P0       |
+| Bar Chart        | Disease tabulation per type              | P0       |
+| Kelurahan Chart  | Distribution per village (stacked bar)   | P0       |
+| Line Chart       | 12-month trend                           | P1       |
+| Download Button  | Export full project                      | P2       |
++------------------+------------------------------------------+----------+
+
+
+4.3 PETA SEBARAN (DISTRIBUTION MAP)
+-----------------------------------
++------------------+------------------------------------------+----------+
+| Feature          | Description                              | Priority |
++------------------+------------------------------------------+----------+
+| Interactive Map  | Leaflet.js + CARTO Positron              | P0       |
+| Polygon Boundaries| Precise kelurahan boundaries from       | P0       |
+|                  | Google My Maps (KML export)              |          |
+| Case Markers     | Individual colored dots per case         | P0       |
+|                  | - Red: DBD, Amber: Hepatitis             |          |
+|                  | - Blue: Diare, Violet: TBC               |          |
+| Geocoding        | Optional: Convert address to coordinates | P2       |
+|                  | via Google Maps Geocoding API            |          |
+| Disease Filter   | Filter: All/DBD/Hepatitis/Diare/TBC      | P0       |
+| Popup Detail     | Click marker/polygon -> disease details  | P0       |
+| Color Intensity  | Dynamic fill based on case count         | P1       |
+| Legend           | Color legend per disease + intensity     | P1       |
++------------------+------------------------------------------+----------+
+
+Kelurahan Polygon Coordinates (from Google My Maps KML):
++---------------------+------------+------------+---------------+
+| Kelurahan           | Latitude   | Longitude  | Vertex Count  |
++---------------------+------------+------------+---------------+
+| Kalijudan           | -7.2563    | 112.7812   | 44 points     |
+| Kalisari            | -7.2640    | 112.8055   | 47 points     |
+| Dukuh Sutorejo      | -7.2615    | 112.7995   | 50 points     |
++---------------------+------------+------------+---------------+
+
+Map Base Layer: CARTO Positron (clean, minimal, no marine icons)
+Default View: [-7.2620, 112.7950], zoom 14
+
+Marker Logic:
+- Priority 1: Use latitude/longitude from geocoding (if available)
+- Priority 2: Fallback to kelurahan centroid + random offset
+- Guest users: See disease name only in popup
+- Admin users: See full patient details (Name, NIK, Address, etc.)
+
+
+4.4 INPUT DATA
+--------------
+
+4.4.1 Input DBD (19 Fields)
+---------------------------
+PATIENT DATA:
+- Nama Penderita* (text)
+- NIK* (text, 16 digits only, numeric validation)
+- Tanggal Lahir* (date)
+- Umur* (number, 1-100 years validation)
+- Jenis Kelamin* (select: Laki-laki/Perempuan, required)
+- Alamat Domisili* (text, with geocoding button)
+- Alamat KTP* (text)
+- Kecamatan (default: Mulyorejo)
+- Kelurahan* (select: Kalijudan/Kalisari/Dukuh Sutorejo)
+- RW/RT* (text, format: 01/02)
+- Puskesmas (default: Kalijudan)
+
+CLINICAL DATA:
+- Tanggal Mulai Sakit* (date)
+- Tanggal Diagnosa* (date)
+- Tanggal Pelaporan* (date)
+- Diagnosa RS* (select: DD/DBD/DSS)
+- Keadaan Pulang* (select: Sembuh/Meninggal)
+
+LAB DATA:
+- IgM (select: Reaktif/Non)
+- IgG (select: Reaktif/Non)
+- NS1 (select: Reaktif/Non)
+
+Form Validations:
+- NIK: Must be exactly 16 digits (numeric only)
+- Umur: Must be between 1-100 years
+- Jenis Kelamin: Cannot be "Pilih" (must select Laki-laki/Perempuan)
+- All required fields validated before submit
+
+
+4.4.2 Input Other Diseases (Diare/Hepatitis/TBC)
+------------------------------------------------
++------------------------+--------+----------+
+| Field                  | Type   | Required |
++------------------------+--------+----------+
+| Jenis Penyakit*        | Select | Yes      |
+| Nama Penderita*       | Text   | Yes      |
+| NIK*                   | Text   | Yes      |
+| Umur                   | Number | No       |
+| Jenis Kelamin*         | Select | Yes      |
+| Alamat Domisili        | Text   | No       |
+| Kelurahan*             | Select | Yes      |
+| RW/RT                  | Text   | No       |
+| Tanggal Pelaporan*     | Date   | Yes      |
++------------------------+--------+----------+
+
+Form Validations:
+- NIK: Must be exactly 16 digits (numeric only)
+- Umur: Must be between 1-100 years
+- Jenis Kelamin: Cannot be "Pilih" (must select Laki-laki/Perempuan)
+
+
+4.5 TARIK DATA (DATA TABLE)
+---------------------------
++------------------+------------------------------------------+----------+
+| Feature          | Description                              | Priority |
++------------------+------------------------------------------+----------+
+| Filter Table     | All/DBD/Hepatitis/Diare/TBC              | P0       |
+| Table Columns    | Disease, Name, NIK, Kelurahan, Date, Act | P0       |
+| Delete Row       | Delete data (admin only)                 | P0       |
+| Export CSV       | Download filtered data as CSV            | P1       |
+| Pagination       | 10 rows per page                         | P2       |
++------------------+------------------------------------------+----------+
+
+
+4.6 SIDEBAR NAVIGATION
+----------------------
++------------------+-------------------+------------------+
+| Menu             | Icon              | Access           |
++------------------+-------------------+------------------+
+| Dashboard        | layout-dashboard  | All              |
+| Peta Sebaran     | map               | All              |
+| Input DBD        | file-plus         | Admin            |
+| Input Lainnya    | file-plus         | Admin            |
+| Tarik Data       | database          | Admin            |
++------------------+-------------------+------------------+
+
+================================================================================
+5. TECHNICAL ARCHITECTURE
+================================================================================
+
+TECH STACK:
+-----------
++------------------------+-------------------+---------------+
+| Layer                  | Technology        | Version       |
++------------------------+-------------------+---------------+
+| Frontend Framework     | Vanilla JS        | -             |
+| UI Library             | Tailwind CSS      | 3.4.17        |
+| Icons                  | Lucide Icons      | 0.263.0       |
+| Charts                 | Chart.js          | 4.4.0         |
+| Maps                   | Leaflet.js        | 1.9.4         |
+| Map Tiles              | OpenStreetMap     | -             |
+| Fonts                  | Plus Jakarta Sans | Google Fonts  |
+| Backend SDK            | Custom SDKs       | -             |
++------------------------+-------------------+---------------+
+
+SDKs Used:
+- element_sdk.js (Element SDK for theming/customization)
+- data_sdk.js (Data SDK for CRUD operations)
+
+
+EXTERNAL DEPENDENCIES (CDN):
+----------------------------
+- https://cdn.tailwindcss.com/3.4.17
+- https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js
+- https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js
+- https://unpkg.com/leaflet@1.9.4/dist/leaflet.css
+- https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
+- https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans
+
+
+================================================================================
+6. DATA STRUCTURE
+================================================================================
+
+6.1 DBD DATA STRUCTURE
+----------------------
+{
+  __backendId: string,
+  disease_type: 'DBD',
+  created_at: ISO8601,
+  nama_penderita: string,
+  nik: string,
+  tanggal_lahir: date,
+  umur: number,
+  jenis_kelamin: 'Laki-laki' | 'Perempuan',
+  alamat_domisili: string,
+  alamat_ktp: string,
+  kecamatan: string,
+  kelurahan: string,
+  rw: string,
+  puskesmas: string,
+  tgl_mulai_sakit: date,
+  tgl_diagnosa: date,
+  tanggal_pelaporan: date,
+  diagnosa_rs: 'DD' | 'DBD' | 'DSS',
+  keadaan_pulang: 'Sembuh' | 'Meninggal',
+  igm: 'Reaktif' | 'Non',
+  igg: 'Reaktif' | 'Non',
+  ns1: 'Reaktif' | 'Non'
+}
+
+
+6.2 OTHER DISEASES STRUCTURE
+----------------------------
+{
+  __backendId: string,
+  disease_type: 'Diare' | 'Hepatitis' | 'TBC',
+  created_at: ISO8601,
+  nama_penderita: string,
+  nik: string,
+  umur: number,
+  jenis_kelamin: 'Laki-laki' | 'Perempuan',
+  alamat_domisili: string,
+  kelurahan: string,
+  tanggal_pelaporan: date
+}
+
+
+6.3 DISEASE COLOR CODING
+------------------------
++-------------+------------+----------+
+| Disease     | Color      | Hex      |
++-------------+------------+----------+
+| DBD         | Red        | #ef4444  |
+| Hepatitis   | Amber      | #f59e0b  |
+| Diare       | Sky        | #0ea5e9  |
+| TBC         | Violet     | #8b5cf6  |
++-------------+------------+----------+
+
+
+6.4 GLOBAL STATE VARIABLES
+--------------------------
+- allData: [] (Array of all disease records)
+- isLoggedIn: false (Boolean)
+- currentFilter: 'all' (String)
+- mapFilter: 'all' (String)
+- chartBar, chartKelurahan, chartLine (Chart.js instances)
+- deleteTarget: null (Object)
+- sidebarCollapsed: false (Boolean)
+- sdkReady: false (Boolean)
+- map: null (Leaflet map instance)
+- mapMarkers: {} (Object)
+
+
+================================================================================
+7. METRICS & ANALYTICS
+================================================================================
+
+KEY PERFORMANCE INDICATORS (KPIs):
+----------------------------------
++------------------------+------------------+------------------+
+| Metric                 | Target           | Measurement      |
++------------------------+------------------+------------------+
+| Data Entry Time        | < 2 minutes/case | Average          |
+| Dashboard Load Time    | < 3 seconds      | Page Load        |
+| Map Render Time        | < 2 seconds      | First Paint      |
+| Data Accuracy          | 100%             | Validation Rate  |
+| User Adoption          | 90% staff        | Active Users     |
++------------------------+------------------+------------------+
+
+
+REPORTING REQUIREMENTS:
+-----------------------
+- Daily: New cases per disease
+- Weekly: Increase/decrease trends
+- Monthly: Health department reports (CSV export)
+- Yearly: Annual statistics per kelurahan
+
+
+================================================================================
+8. SECURITY REQUIREMENTS
+================================================================================
+
+AUTHENTICATION:
+---------------
+- Username/password minimum 6 characters
+- Session timeout after 30 minutes inactive
+- Password reset via security question (answer: 'kalijudan')
+
+
+DATA PROTECTION:
+----------------
+- Client-side validation for all inputs
+- Required field validation
+- NIK uniqueness check (recommended)
+- Delete confirmation modal
+
+
+ACCESS CONTROL MATRIX:
+----------------------
++-------+----------+-----+-------+--------+--------+
+| Role  | Dashboard| Map | Input | Delete | Export |
++-------+----------+-----+-------+--------+--------+
+| Admin | Yes      | Yes | Yes   | Yes    | Yes    |
+| Guest | View Only| View Only | No | No  | Yes    |
++-------+----------+-----+-------+--------+--------+
+
+
+================================================================================
+9. UI/UX REQUIREMENTS
+================================================================================
+
+DESIGN SYSTEM:
+--------------
+Font Family     : Plus Jakarta Sans
+Primary Color   : Emerald (#10b981)
+Secondary Color : Slate (#64748b)
+Border Radius   : 12px (cards), 8px (buttons)
+Shadows         : Subtle shadows for depth
+
+
+RESPONSIVE DESIGN:
+------------------
++----------+---------------+----------------------------------+
+| Breakpoint| Width        | Layout                           |
++----------+---------------+----------------------------------+
+| Mobile   | < 640px       | Single column, collapsible sidebar|
+| Tablet   | 640-1024px    | 2 column grid                    |
+| Desktop  | > 1024px      | 4 column grid, fixed sidebar     |
++----------+---------------+----------------------------------+
+
+
+ACCESSIBILITY:
+--------------
+- Keyboard navigation support
+- ARIA labels for interactive elements
+- Color contrast WCAG AA compliant
+- Screen reader friendly
+
+
+================================================================================
+10. BROWSER SUPPORT
+================================================================================
+
++----------------+-------------------+---------------+
+| Browser        | Version           | Support       |
++----------------+-------------------+---------------+
+| Chrome         | Latest 2 versions | Full          |
+| Firefox        | Latest 2 versions | Full          |
+| Safari         | Latest 2 versions | Full          |
+| Edge           | Latest 2 versions | Full          |
+| Mobile Safari  | iOS 12+           | Full          |
+| Chrome Mobile  | Android 8+        | Full          |
++----------------+-------------------+---------------+
+
+
+================================================================================
+11. ROADMAP
+================================================================================
+
+PHASE 1 - MVP (Current - March 2026)
+------------------------------------
+[x] Login & Guest Access
+[x] Dashboard with charts
+[x] Distribution map (Leaflet)
+[x] Input DBD & Other Diseases
+[x] Data Table & Export CSV
+
+
+PHASE 2 - Enhancement (Q2 2026)
+-------------------------------
+[ ] User management (multi-user)
+[ ] Edit data functionality
+[ ] Print-friendly reports
+[ ] WhatsApp notification integration
+[ ] SMS gateway for DBD alerts
+
+
+PHASE 3 - Advanced (Q3 2026)
+----------------------------
+[ ] Predictive analytics (trend prediction)
+[ ] Heat map for hotspot areas
+[ ] Mobile app (PWA)
+[ ] API integration with Health Department
+[ ] Backup & restore functionality
+
+
+================================================================================
+12. CONSTRAINTS & ASSUMPTIONS
+================================================================================
+
+CONSTRAINTS:
+------------
+1. Data Limit: Maximum 999 entries (hardcoded limit)
+2. No Backend: Using custom SDK (element_sdk.js, data_sdk.js)
+3. Single Location: Only for Puskesmas Kalijudan
+4. No Image Upload: No patient photo upload feature
+
+
+ASSUMPTIONS:
+------------
+1. Internet connection available for map tiles (OpenStreetMap)
+2. Browser supports modern JavaScript (ES6+)
+3. User has basic computer literacy
+4. Data SDK provides persistence layer
+
+
+================================================================================
+13. ACCEPTANCE CRITERIA
+================================================================================
+
+DASHBOARD:
+----------
+[ ] Display 4 stat cards with real-time case counts
+[ ] Bar chart shows disease tabulation
+[ ] Kelurahan chart shows distribution per village
+[ ] Line chart shows 12-month trend
+[ ] Data auto-updates after new input
+
+
+DISTRIBUTION MAP:
+-----------------
+[ ] Leaflet map renders correctly
+[ ] 3 kelurahan markers appear at correct locations
+[ ] Click marker shows popup with case details
+[ ] Disease filter works (All/DBD/Hepatitis/Diare/TBC)
+[ ] Color legend matches diseases
+
+
+INPUT DATA:
+-----------
+[ ] DBD form with 19 complete fields
+[ ] Other diseases form with 8 fields
+[ ] Validation for required fields
+[ ] Success toast after save
+[ ] Form resets after successful submit
+
+
+DATA TABLE:
+-----------
+[ ] Table displays all data
+[ ] Filter per disease works
+[ ] Delete button (admin only) with confirmation
+[ ] Export CSV downloads filtered data
+[ ] Empty state if no data
+
+
+AUTHENTICATION:
+---------------
+[ ] Login with admin/admin123 succeeds
+[ ] Guest button opens dashboard (view only)
+[ ] Forgot password with security question works
+[ ] Logout returns to login page
+
+
+================================================================================
+14. CONTACT & SUPPORT
+================================================================================
+
+Product Owner    : Puskesmas Kalijudan
+Developer        : [Your Name]
+Technical Support: [Support Email]
+
+
+================================================================================
+15. VERSION HISTORY
+================================================================================
+
++-----------+---------------+----------------------------------+----------+
+| Version   | Date          | Changes                          | Author   |
++-----------+---------------+----------------------------------+----------+
+| 1.0.0     | Mar 30, 2026  | Initial Release                  | -        |
+| 1.0.1     | Mar 30, 2026  | Map upgrade (SVG to Leaflet)     | -        |
+| 1.0.2     | Mar 30, 2026  | Map improvements:                | -        |
+|           |               | - Polygon boundaries from Google |          |
+|           |               |   My Maps KML (44-50 vertices)   |          |
+|           |               | - Remove marker pins             |          |
+|           |               | - Base layer: CARTO Positron     |          |
+|           |               | - Centered view [-7.2620,112.7950]|         |
+|           |               | - Dynamic intensity coloring     |          |
+| 1.0.3     | Mar 30, 2026  | Major enhancements:              | -        |
+|           |               | - Case markers on map (colored   |          |
+|           |               |   dots per disease type)         |          |
+|           |               | - Guest users: disease name only |          |
+|           |               | - Admin users: full patient info |          |
+|           |               | - Optional geocoding for exact   |          |
+|           |               |   location (Google Maps API)     |          |
+|           |               | - NIK validation: 16 digits only |          |
+|           |               | - Umur validation: 1-100 years   |          |
+|           |               | - Jenis Kelamin: required select |          |
+|           |               | - RW/RT field added to forms     |          |
+|           |               | - Numeric-only input for NIK     |          |
+|           |               |   and Umur fields                |          |
++-----------+---------------+----------------------------------+----------+
+
+
+================================================================================
+DOCUMENT INFO
+================================================================================
+
+Created: March 30, 2026
+Status: Approved for Production
+Classification: Internal Use Only
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================
