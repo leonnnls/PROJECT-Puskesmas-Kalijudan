@@ -464,6 +464,38 @@ const KELURAHAN_LIST = ['Kalijudan','Kalisari','Dukuh Sutorejo'];
 const DISEASE_COLORS = {DBD:'#ef4444',Hepatitis:'#f59e0b',Diare:'#0ea5e9',TBC:'#8b5cf6'};
 const DISEASE_LIST = ['DBD','Hepatitis','Diare','TBC'];
 
+// ========================================
+// SECURITY: Input Sanitization (XSS Protection)
+// ========================================
+// Prevent Cross-Site Scripting (XSS) by escaping HTML entities
+// This prevents malicious scripts from being executed in the browser
+function escapeHtml(text) {
+  if (!text) return '';
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+    '/': '&#x2F;',
+    '`': '&#x60;',
+    '=': '&#x3D;'
+  };
+  return String(text).replace(/[&<>"'`=\/]/g, (s) => map[s]);
+}
+
+// Sanitize object values (for form data)
+function sanitizeData(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const sanitized = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      sanitized[key] = escapeHtml(obj[key]);
+    }
+  }
+  return sanitized;
+}
+
 // Polygon boundaries untuk setiap kelurahan
 // Koordinat dari GeoJSON - Trace manual Google Maps (Updated: March 2026)
 // Sumber: Google My Maps - Trace manual boundary kelurahan
@@ -602,7 +634,9 @@ function setupLoginForm() {
       
       const result = await login(finalEmail, password);
       if(result.isOk) {
-        showToast('Login berhasil! Sesi akan berakhir setelah 15 menit tidak aktif.');
+        // Show personalized welcome message
+        const userName = result.nama || 'User';
+        showToast(`Halo ${userName}!`);
       } else {
         document.getElementById('loginError').textContent = result.error;
         document.getElementById('loginError').classList.remove('hidden');
@@ -1068,21 +1102,21 @@ function createCaseMarker(caseData, index) {
 
   // Guest user hanya lihat nama penyakit, admin lihat detail lengkap
   if (isLoggedIn) {
-    const patientName = caseData.nama_penderita || 'Tanpa Nama';
-    const nik = caseData.nik || '-';
-    const tanggal = caseData.tanggal_pelaporan || '-';
-    const alamat = caseData.alamat_domisili || '-';
+    const patientName = escapeHtml(caseData.nama_penderita) || 'Tanpa Nama';
+    const nik = escapeHtml(caseData.nik) || '-';
+    const tanggal = escapeHtml(caseData.tanggal_pelaporan) || '-';
+    const alamat = escapeHtml(caseData.alamat_domisili) || '-';
 
     marker.bindPopup(`
       <div class="min-w-[180px]">
         <p style="font-weight:700;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;">
-          ${caseData.disease_type}
+          ${escapeHtml(caseData.disease_type)}
         </p>
         <div style="font-size:11px;line-height:1.6;">
           <div><strong>Nama:</strong> ${patientName}</div>
           <div><strong>NIK:</strong> ${nik}</div>
           <div><strong>Alamat:</strong> ${alamat}</div>
-          <div><strong>Kelurahan:</strong> ${kel}</div>
+          <div><strong>Kelurahan:</strong> ${escapeHtml(kel)}</div>
           <div><strong>Tgl Laporan:</strong> ${tanggal}</div>
         </div>
       </div>
@@ -1091,7 +1125,7 @@ function createCaseMarker(caseData, index) {
     // Guest user - hanya nama penyakit
     marker.bindPopup(`
       <div class="min-w-[120px] text-center">
-        <p style="font-weight:700;font-size:12px;">${caseData.disease_type}</p>
+        <p style="font-weight:700;font-size:12px;">${escapeHtml(caseData.disease_type)}</p>
       </div>
     `);
   }
@@ -1208,12 +1242,12 @@ function updateTable() {
   tb.innerHTML = filt.map(d => `
     <tr class="border-b border-slate-50 hover:bg-slate-50">
       <td class="px-4 py-2">
-        <span class="px-2 py-0.5 rounded-full text-[10px] font-600 ${tc[d.disease_type]}">${d.disease_type}</span>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-600 ${tc[d.disease_type]}">${escapeHtml(d.disease_type)}</span>
       </td>
-      <td class="px-4 py-2">${d.nama_penderita || '-'}</td>
-      <td class="px-4 py-2 font-mono text-[11px]">${d.nik || '-'}</td>
-      <td class="px-4 py-2">${d.kelurahan || '-'}</td>
-      <td class="px-4 py-2">${d.tanggal_pelaporan || '-'}</td>
+      <td class="px-4 py-2">${escapeHtml(d.nama_penderita) || '-'}</td>
+      <td class="px-4 py-2 font-mono text-[11px]">${escapeHtml(d.nik) || '-'}</td>
+      <td class="px-4 py-2">${escapeHtml(d.kelurahan) || '-'}</td>
+      <td class="px-4 py-2">${escapeHtml(d.tanggal_pelaporan) || '-'}</td>
       <td class="px-4 py-2">
         ${isLoggedIn ? `<button onclick="deleteRow('${d.__backendId}')" class="text-red-400 hover:text-red-600">
           <i data-lucide="trash-2" style="width:14px;height:14px"></i>
@@ -1318,13 +1352,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const obj = { disease_type: 'DBD' };
     for(const [k,v] of fd.entries()) obj[k] = v || '';
     if(fd.get('umur')) obj.umur = parseInt(fd.get('umur')) || 0;
-    
+
     // Add coordinates if available
     if (latitude) obj.latitude = latitude;
     if (longitude) obj.longitude = longitude;
 
+    // SECURITY: Sanitize all data before saving to prevent XSS
+    const sanitizedObj = sanitizeData(obj);
+
     btn.textContent = 'Menyimpan...';
-    const r = await createData(obj);
+    const r = await createData(sanitizedObj);
     btn.disabled = false;
     btn.textContent = 'Simpan Data DBD';
 
@@ -1406,13 +1443,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const obj = {};
     for(const [k,v] of fd.entries()) obj[k] = v || '';
     if(fd.get('umur')) obj.umur = parseInt(fd.get('umur')) || 0;
-    
+
     // Add coordinates if available
     if (latitude) obj.latitude = latitude;
     if (longitude) obj.longitude = longitude;
 
+    // SECURITY: Sanitize all data before saving to prevent XSS
+    const sanitizedObj = sanitizeData(obj);
+
     btn.textContent = 'Menyimpan...';
-    const r = await createData(obj);
+    const r = await createData(sanitizedObj);
     btn.disabled = false;
     btn.textContent = 'Simpan Data';
 
@@ -1475,8 +1515,8 @@ window.loadStaffData = async function() {
     
     tbody.innerHTML = users.map(u => `
       <tr class="border-b border-slate-50 hover:bg-slate-50">
-        <td class="px-4 py-3 font-600 text-slate-700">${u.nama || '-'}</td>
-        <td class="px-4 py-3 text-slate-600">${u.email}</td>
+        <td class="px-4 py-3 font-600 text-slate-700">${escapeHtml(u.nama) || '-'}</td>
+        <td class="px-4 py-3 text-slate-600">${escapeHtml(u.email)}</td>
         <td class="px-4 py-3">
           <span class="px-2 py-1 rounded-full text-[10px] font-600 ${u.role === 'admin' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'}">
             ${u.role === 'admin' ? 'Admin' : 'Staff'}

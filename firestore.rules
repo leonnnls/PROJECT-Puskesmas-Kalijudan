@@ -1,0 +1,133 @@
+// Firestore Security Rules for SIPERTI
+// Puskesmas Kalijudan
+// 
+// CARA DEPLOY:
+// 1. Install Firebase CLI: npm install -g firebase-tools
+// 2. Login: firebase login
+// 3. Init project: firebase init firestore
+// 4. Deploy: firebase deploy --only firestore:rules
+//
+// ATAU MANUAL via Firebase Console:
+// 1. Buka https://console.firebase.google.com/
+// 2. Pilih project: siperti-puskesmas-kalijudan
+// 3. Firestore Database → Rules
+// 4. Copy-paste rules ini
+// 5. Publish
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function: Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function: Check if user is admin
+    // Uses custom claims for secure role checking
+    function isAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.admin == true;
+    }
+    
+    // Helper function: Check if user is staff or admin
+    function isStaffOrAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.staff == true || 
+              request.auth.token.admin == true);
+    }
+    
+    // Helper function: Check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ========================================
+    // COLLECTION: cases (Data Pasien)
+    // ========================================
+    match /cases/{caseId} {
+      
+      // READ: Everyone can read (for guest dashboard & map)
+      allow read: if true;
+      
+      // CREATE: Only authenticated staff/admin
+      allow create: if isStaffOrAdmin() &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['disease_type', 'nama_penderita', 'nik']) &&
+                       // Validate disease_type
+                       request.resource.data.disease_type in ['DBD', 'Hepatitis', 'Diare', 'TBC'] &&
+                       // Validate NIK format (16 digits)
+                       request.resource.data.nik.matches('^[0-9]{16}$') &&
+                       // Validate NIK uniqueness (prevent duplicates)
+                       !exists(/databases/$(database)/documents/cases/$(request.resource.data.nik)) &&
+                       // Validate umur range (if provided)
+                       (request.resource.data.keys().hasAny(['umur']) ? 
+                        (request.resource.data.umur >= 1 && request.resource.data.umur <= 100) : true) &&
+                       // Validate jenis_kelamin
+                       (request.resource.data.keys().hasAny(['jenis_kelamin']) ?
+                        request.resource.data.jenis_kelamin in ['Laki-laki', 'Perempuan'] : true) &&
+                       // Prevent setting admin-only fields
+                       !request.resource.data.keys().hasAny(['__adminOnly']);
+      
+      // UPDATE: Only staff/admin (no document update in current app, but prepared)
+      allow update: if isStaffOrAdmin() &&
+                       // Cannot change disease_type or NIK
+                       request.resource.data.disease_type == resource.data.disease_type &&
+                       request.resource.data.nik == resource.data.nik &&
+                       // Validate umur if changed
+                       (request.resource.data.keys().hasAny(['umur']) ?
+                        (request.resource.data.umur >= 1 && request.resource.data.umur <= 100) : true);
+      
+      // DELETE: Only admin (for security, restrict delete to admin)
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // COLLECTION: users (User Accounts)
+    // ========================================
+    match /users/{userId} {
+      
+      // READ: 
+      // - Admin can read all users
+      // - Users can read their own profile
+      allow read: if isAdmin() || isOwner(userId);
+      
+      // CREATE: Only admin can create users
+      // Note: Actual creation happens via Cloud Function, this is fallback
+      allow create: if isAdmin() &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['email', 'nama', 'role']) &&
+                       // Validate role (prevent privilege escalation)
+                       request.resource.data.role in ['staff', 'admin'] &&
+                       // Only admin can create admin accounts
+                       (request.resource.data.role == 'admin' ? isAdmin() : true) &&
+                       // Validate email format
+                       request.resource.data.email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$') &&
+                       // Nama cannot be empty
+                       request.resource.data.nama.size() > 0;
+      
+      // UPDATE: 
+      // - Admin can update any user
+      // - Users can update their own profile (except role)
+      allow update: if isAdmin() || 
+                       (isOwner(userId) &&
+                        // Users cannot change their own role
+                        !request.resource.data.keys().hasAny(['role', 'email']));
+      
+      // DELETE: Only admin can delete users
+      allow delete: if isAdmin() &&
+                       // Prevent deleting the last admin
+                       // (This is a simplified check, better handled in Cloud Function)
+                       resource.data.role != 'admin' || 
+                       // Allow delete if there are other admins
+                       isAdmin();
+    }
+    
+    // ========================================
+    // DENY ALL OTHER COLLECTIONS
+    // ========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

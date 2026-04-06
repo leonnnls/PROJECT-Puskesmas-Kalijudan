@@ -3,7 +3,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 // Firebase config
 const firebaseConfig = {
@@ -19,6 +19,21 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+// ========================================
+// SECURITY: Set Session Persistence
+// ========================================
+// Menggunakan browserSessionPersistence agar:
+// 1. Token tidak tersimpan permanen di localStorage
+// 2. User otomatis logout saat tab/browser ditutup
+// 3. Mencegah session hijacking via local storage access
+setPersistence(auth, browserSessionPersistence)
+  .then(() => {
+    console.log('🔒 Firebase Persistence: SESSION (Auto-logout saat tab ditutup)');
+  })
+  .catch((error) => {
+    console.error('❌ Error setting persistence:', error);
+  });
 
 // Collection references
 const casesCollection = collection(db, 'cases');
@@ -177,16 +192,40 @@ async function deleteData(id) {
 async function login(email, password) {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    
-    // Get user role from Firestore
-    const userData = await getUserByEmail(email);
-    
+
+    // Force refresh ID token to get latest custom claims
+    await userCredential.user.getIdToken(true);
+
+    // Get user role from Custom Claims (server-side, secure)
+    const idTokenResult = await userCredential.user.getIdTokenResult();
+    const customClaims = idTokenResult.claims;
+
+    // Determine role from custom claims
+    let role = 'staff'; // default
+    if (customClaims.admin === true) {
+      role = 'admin';
+    } else if (customClaims.staff === true) {
+      role = 'staff';
+    }
+
+    // Fallback: If custom claims not set yet (first time), get from Firestore
+    if (!customClaims.admin && !customClaims.staff) {
+      console.warn('⚠️ Custom claims not found, falling back to Firestore role');
+      const userData = await getUserByEmail(email);
+      if (userData?.role) {
+        role = userData.role;
+      }
+    }
+
+    const userName = customClaims.nama || idTokenResult.claims.name || email.split('@')[0];
+
     return {
       isOk: true,
       user: userCredential.user,
       email: userCredential.user.email,
-      role: userData?.role || 'staff',
-      nama: userData?.nama || email.split('@')[0]
+      role: role,
+      nama: userName,
+      customClaims: customClaims // For debugging
     };
   } catch (error) {
     console.error("Login error:", error);
@@ -217,14 +256,49 @@ async function logout() {
 function onAuthStateChange(callback) {
   return onAuthStateChanged(auth, async (user) => {
     if (user) {
-      const userData = await getUserByEmail(user.email);
-      callback({
-        isLoggedIn: true,
-        user: user,
-        email: user.email,
-        role: userData?.role || 'staff',
-        nama: userData?.nama || user.email.split('@')[0]
-      });
+      try {
+        // Get ID token with custom claims
+        const idTokenResult = await user.getIdTokenResult();
+        const customClaims = idTokenResult.claims;
+
+        // Determine role from custom claims
+        let role = 'staff';
+        if (customClaims.admin === true) {
+          role = 'admin';
+        } else if (customClaims.staff === true) {
+          role = 'staff';
+        }
+
+        // Fallback to Firestore if claims not set
+        if (!customClaims.admin && !customClaims.staff) {
+          console.warn('⚠️ Custom claims not found in auth state, using Firestore fallback');
+          const userData = await getUserByEmail(user.email);
+          if (userData?.role) {
+            role = userData.role;
+          }
+        }
+
+        const userName = customClaims.nama || customClaims.name || user.email.split('@')[0];
+
+        callback({
+          isLoggedIn: true,
+          user: user,
+          email: user.email,
+          role: role,
+          nama: userName,
+          customClaims: customClaims
+        });
+      } catch (error) {
+        console.error('Error getting auth state:', error);
+        // Fallback to basic user info
+        callback({
+          isLoggedIn: true,
+          user: user,
+          email: user.email,
+          role: 'staff',
+          nama: user.email.split('@')[0]
+        });
+      }
     } else {
       callback({ isLoggedIn: false, user: null });
     }

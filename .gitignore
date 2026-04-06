@@ -43,3 +43,4 @@ temp/
 
 # Testing
 coverage/
+node_modules/\nfunctions/package-lock.json\n.qwen/
