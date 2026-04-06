@@ -2,7 +2,7 @@
 // Puskesmas Kalijudan
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, onSnapshot, updateDoc, where } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 // Firebase config
@@ -41,13 +41,15 @@ const usersCollection = collection(db, 'users');
 
 // ============ USER MANAGEMENT FUNCTIONS ============
 
-// Get user data from Firestore
+// Get user data from Firestore (optimized with where query)
 async function getUserData(userId) {
   try {
-    const userDoc = await getDocs(query(usersCollection, orderBy('email')));
-    const user = userDoc.docs.find(doc => doc.id === userId);
-    if (user) {
-      return { id: user.id, ...user.data() };
+    const q = query(usersCollection, where('uid', '==', userId));
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      return { id: doc.id, ...doc.data() };
     }
     return null;
   } catch (error) {
@@ -56,13 +58,16 @@ async function getUserData(userId) {
   }
 }
 
-// Get user by email
+// Get user by email (optimized with where query)
 async function getUserByEmail(email) {
   try {
-    const userDoc = await getDocs(query(usersCollection, orderBy('email')));
-    const user = userDoc.docs.find(doc => doc.data().email === email);
-    if (user) {
-      return { id: user.id, ...user.data() };
+    // Use where query instead of fetching all users
+    const q = query(usersCollection, where('email', '==', email));
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      return { id: doc.id, ...doc.data() };
     }
     return null;
   } catch (error) {
@@ -201,23 +206,32 @@ async function login(email, password) {
     const customClaims = idTokenResult.claims;
 
     // Determine role from custom claims
-    let role = 'staff'; // default
+    let role = null;
     if (customClaims.admin === true) {
       role = 'admin';
     } else if (customClaims.staff === true) {
       role = 'staff';
     }
 
-    // Fallback: If custom claims not set yet (first time), get from Firestore
-    if (!customClaims.admin && !customClaims.staff) {
+    // Fallback: If custom claims not set yet, get from Firestore
+    let userName = email.split('@')[0];
+    if (!role) {
       console.warn('⚠️ Custom claims not found, falling back to Firestore role');
       const userData = await getUserByEmail(email);
       if (userData?.role) {
         role = userData.role;
+        console.log(`✅ Role from Firestore: ${role}`);
+      } else {
+        role = 'staff'; // Default fallback
+        console.warn('⚠️ No role found in Firestore, defaulting to staff');
       }
+      if (userData?.nama) {
+        userName = userData.nama;
+      }
+    } else {
+      // Use name from custom claims if available
+      userName = customClaims.nama || idTokenResult.claims.name || userName;
     }
-
-    const userName = customClaims.nama || idTokenResult.claims.name || email.split('@')[0];
 
     return {
       isOk: true,
@@ -262,7 +276,7 @@ function onAuthStateChange(callback) {
         const customClaims = idTokenResult.claims;
 
         // Determine role from custom claims
-        let role = 'staff';
+        let role = null;
         if (customClaims.admin === true) {
           role = 'admin';
         } else if (customClaims.staff === true) {
@@ -270,15 +284,23 @@ function onAuthStateChange(callback) {
         }
 
         // Fallback to Firestore if claims not set
-        if (!customClaims.admin && !customClaims.staff) {
+        let userName = user.email.split('@')[0];
+        if (!role) {
           console.warn('⚠️ Custom claims not found in auth state, using Firestore fallback');
           const userData = await getUserByEmail(user.email);
           if (userData?.role) {
             role = userData.role;
+            console.log(`✅ Role from Firestore (auth state): ${role}`);
+          } else {
+            role = 'staff';
+            console.warn('⚠️ No role found in Firestore, defaulting to staff');
           }
+          if (userData?.nama) {
+            userName = userData.nama;
+          }
+        } else {
+          userName = customClaims.nama || customClaims.name || userName;
         }
-
-        const userName = customClaims.nama || customClaims.name || user.email.split('@')[0];
 
         callback({
           isLoggedIn: true,
