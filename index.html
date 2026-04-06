@@ -453,6 +453,13 @@ let sidebarCollapsed = false;
 let dataUnsubscribe = null;
 let authUnsubscribe = null;
 
+// Inactivity timeout settings (15 minutes)
+const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
+const WARNING_BEFORE_TIMEOUT = 2 * 60 * 1000; // Show warning 2 minutes before timeout
+let inactivityTimer = null;
+let warningTimer = null;
+let warningModalShown = false;
+
 const KELURAHAN_LIST = ['Kalijudan','Kalisari','Dukuh Sutorejo'];
 const DISEASE_COLORS = {DBD:'#ef4444',Hepatitis:'#f59e0b',Diare:'#0ea5e9',TBC:'#8b5cf6'};
 const DISEASE_LIST = ['DBD','Hepatitis','Diare','TBC'];
@@ -569,6 +576,11 @@ function initAuth() {
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('mainApp').classList.remove('hidden');
       lucide.createIcons();
+      
+      // Initialize inactivity tracking for logged-in users
+      initInactivityTracking();
+      resetInactivityTimer();
+      
       setTimeout(() => { initCharts(); initData(); }, 100);
     }
   });
@@ -590,7 +602,7 @@ function setupLoginForm() {
       
       const result = await login(finalEmail, password);
       if(result.isOk) {
-        showToast('Login berhasil!');
+        showToast('Login berhasil! Sesi akan berakhir setelah 15 menit tidak aktif.');
       } else {
         document.getElementById('loginError').textContent = result.error;
         document.getElementById('loginError').classList.remove('hidden');
@@ -661,6 +673,13 @@ function setupLoginForm() {
 
 // Logout function
 window.logout = async function() {
+  // Clear inactivity timers
+  resetInactivityTimer();
+  if(inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
+  if(warningTimer) { clearTimeout(warningTimer); warningTimer = null; }
+  warningModalShown = false;
+  hideWarningModal();
+
   await firebaseLogout();
   document.getElementById('mainApp').classList.add('hidden');
   document.getElementById('loginPage').classList.remove('hidden');
@@ -668,6 +687,132 @@ window.logout = async function() {
   document.getElementById('loginPass').value = '';
   if(dataUnsubscribe) dataUnsubscribe();
 };
+
+// ============ INACTIVITY TIMEOUT FUNCTIONS ============
+
+// Reset inactivity timer (called on user activity)
+function resetInactivityTimer() {
+  // Don't start timer if not logged in
+  if(!isLoggedIn) return;
+
+  // Clear existing timers
+  if(inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
+  if(warningTimer) { clearTimeout(warningTimer); warningTimer = null; }
+  warningModalShown = false;
+  hideWarningModal();
+
+  // Set warning timer (2 minutes before timeout)
+  warningTimer = setTimeout(() => {
+    if(isLoggedIn && !warningModalShown) {
+      showWarningModal();
+    }
+  }, INACTIVITY_TIMEOUT - WARNING_BEFORE_TIMEOUT);
+
+  // Set logout timer
+  inactivityTimer = setTimeout(() => {
+    if(isLoggedIn) {
+      showToast('Sesi berakhir karena tidak ada aktivitas', 'error');
+      window.logout();
+    }
+  }, INACTIVITY_TIMEOUT);
+}
+
+// Show warning modal before timeout
+function showWarningModal() {
+  warningModalShown = true;
+
+  let modal = document.getElementById('timeoutWarningModal');
+  if(!modal) {
+    // Create modal if it doesn't exist
+    modal = document.createElement('div');
+    modal.id = 'timeoutWarningModal';
+    modal.className = 'hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center';
+    modal.innerHTML = `
+      <div class="bg-white rounded-2xl p-6 w-full max-w-sm mx-4 fade-in shadow-xl">
+        <div class="text-center mb-4">
+          <div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <i data-lucide="clock" class="text-amber-600" style="width:32px;height:32px"></i>
+          </div>
+          <h3 class="text-lg font-800 text-slate-800">Sesi Akan Berakhir</h3>
+          <p class="text-sm text-slate-500 mt-1">Anda tidak aktif selama 15 menit</p>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+          <p class="text-xs text-amber-800 text-center">
+            Sesi akan berakhir dalam <span id="countdownTimer" class="font-700 text-amber-900">2:00</span> menit
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="stayLoggedIn()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-600 py-2.5 rounded-xl transition text-sm">
+            Tetap Masuk
+          </button>
+          <button onclick="window.logout()" class="flex-1 border border-slate-300 text-slate-600 hover:bg-slate-50 font-600 py-2.5 rounded-xl transition text-sm">
+            Keluar
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  modal.classList.remove('hidden');
+  if(window.lucide) lucide.createIcons();
+
+  // Start countdown
+  startCountdown(WARNING_BEFORE_TIMEOUT / 1000);
+}
+
+// Hide warning modal
+function hideWarningModal() {
+  const modal = document.getElementById('timeoutWarningModal');
+  if(modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+// Stay logged in (reset timer)
+window.stayLoggedIn = function() {
+  hideWarningModal();
+  resetInactivityTimer();
+  showToast('Sesi diperpanjang');
+};
+
+// Countdown timer in warning modal
+let countdownInterval = null;
+function startCountdown(seconds) {
+  if(countdownInterval) clearInterval(countdownInterval);
+
+  let remaining = seconds;
+  const countdownEl = document.getElementById('countdownTimer');
+
+  countdownInterval = setInterval(() => {
+    const minutes = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    if(countdownEl) {
+      countdownEl.textContent = `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
+    remaining--;
+
+    if(remaining < 0) {
+      clearInterval(countdownInterval);
+    }
+  }, 1000);
+}
+
+// Track user activity and reset timer
+function trackUserActivity() {
+  resetInactivityTimer();
+}
+
+// Initialize inactivity tracking
+function initInactivityTracking() {
+  // Track various user activities
+  const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+
+  events.forEach(event => {
+    document.addEventListener(event, trackUserActivity, true);
+  });
+}
+// ============ END INACTIVITY TIMEOUT ============
 
 // Toggle sidebar
 window.toggleSidebar = function() {
