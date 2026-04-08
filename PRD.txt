@@ -4,9 +4,9 @@
                     Puskesmas Kalijudan
 ================================================================================
 
-VERSION: 1.0.3
-DATE: March 30, 2026
-STATUS: Production Ready
+VERSION: 1.0.4
+DATE: April 6, 2026
+STATUS: Production Ready (Security Enhanced)
 
 ================================================================================
 TABLE OF CONTENTS
@@ -37,7 +37,14 @@ Client            : Puskesmas Kalijudan, Kecamatan Mulyorejo
 Application Type  : Web-based Health Information System
 Platform          : Browser (Desktop & Mobile)
 Status            : Production Ready
-Version           : 1.0.0
+Version           : 1.0.4
+
+Key Enhancements:
+- Comprehensive security implementation (Firestore Rules, XSS Protection)
+- Inactivity timeout (15 minutes with 2-minute warning)
+- Session persistence (auto-logout when tab/browser closed)
+- Role-based access control with secure fallback mechanism
+- Input sanitization for all user inputs
 
 ================================================================================
 2. BACKGROUND & OBJECTIVES
@@ -57,6 +64,7 @@ SIPERTI provides a digital system for:
 - Real-time visualization through dashboard and interactive map
 - Data export for reporting
 - Monthly disease trend monitoring
+- Secure multi-user access with role-based permissions
 
 ================================================================================
 3. USER PERSONAS
@@ -70,12 +78,24 @@ Needs:
 - Input new case data (DBD, Hepatitis, Diare, TBC)
 - View daily/weekly/monthly statistics
 - Export data for health department reports
-- Manage data (edit/delete)
+- Manage staff accounts (create/edit/delete users)
+- Manage data (edit/delete cases)
 
 Goal: Efficiency in reporting and data accuracy
 
+PERSONA 2: Staff Puskesmas
+--------------------------
+Profile: Staff member who handles data entry
 
-PERSONA 2: Guest User
+Needs:
+- Input new case data (DBD, Hepatitis, Diare, TBC)
+- View statistics and distribution map
+- Export data for reporting
+- Cannot manage staff accounts
+
+Goal: Efficient data entry and monitoring
+
+PERSONA 3: Guest User
 ---------------------
 Profile: Visitor who wants to view dashboard without full access
 
@@ -95,15 +115,22 @@ Goal: Quick information without login
 +------------------+------------------------------------------+----------+
 | Feature          | Description                              | Priority |
 +------------------+------------------------------------------+----------+
-| Login Page       | Username/password authentication         | P0       |
+| Login Page       | Email/password authentication            | P0       |
+| Session Persistence | Auto-logout when tab/browser closed   | P0       |
+| Inactivity Timeout | 15 min timeout with 2 min warning      | P0       |
 | Guest Access     | Dashboard view without login             | P1       |
 | Forgot Password  | Reset via security question              | P2       |
-| Session Mgmt     | Auto-logout after inactive               | P2       |
 +------------------+------------------------------------------+----------+
 
 Default Credentials:
-- Username: admin
+- Email: admin@kalijudan.com
 - Password: admin123
+
+Session Behavior:
+- Token stored in session (not localStorage)
+- Auto-logout when tab closed
+- Inactivity timeout: 15 minutes
+- Warning modal appears 2 minutes before timeout
 
 
 4.2 DASHBOARD
@@ -130,8 +157,8 @@ Default Credentials:
 | Case Markers     | Individual colored dots per case         | P0       |
 |                  | - Red: DBD, Amber: Hepatitis             |          |
 |                  | - Blue: Diare, Violet: TBC               |          |
-| Geocoding        | Optional: Convert address to coordinates | P2       |
-|                  | via Google Maps Geocoding API            |          |
+| Geocoding        | Convert address to coordinates           | P1       |
+|                  | via Nominatim OSM (free, no API key)     |          |
 | Disease Filter   | Filter: All/DBD/Hepatitis/Diare/TBC      | P0       |
 | Popup Detail     | Click marker/polygon -> disease details  | P0       |
 | Color Intensity  | Dynamic fill based on case count         | P1       |
@@ -154,7 +181,8 @@ Marker Logic:
 - Priority 1: Use latitude/longitude from geocoding (if available)
 - Priority 2: Fallback to kelurahan centroid + random offset
 - Guest users: See disease name only in popup
-- Admin users: See full patient details (Name, NIK, Address, etc.)
+- Admin/Staff users: See full patient details (Name, NIK, Address, etc.)
+- All popup data is XSS-sanitized
 
 
 4.4 INPUT DATA
@@ -168,7 +196,7 @@ PATIENT DATA:
 - Tanggal Lahir* (date)
 - Umur* (number, 1-100 years validation)
 - Jenis Kelamin* (select: Laki-laki/Perempuan, required)
-- Alamat Domisili* (text, with geocoding button)
+- Alamat Domisili* (text, with auto-geocoding)
 - Alamat KTP* (text)
 - Kecamatan (default: Mulyorejo)
 - Kelurahan* (select: Kalijudan/Kalisari/Dukuh Sutorejo)
@@ -192,6 +220,7 @@ Form Validations:
 - Umur: Must be between 1-100 years
 - Jenis Kelamin: Cannot be "Pilih" (must select Laki-laki/Perempuan)
 - All required fields validated before submit
+- Input sanitization: All fields XSS-protected before saving
 
 
 4.4.2 Input Other Diseases (Diare/Hepatitis/TBC)
@@ -214,6 +243,7 @@ Form Validations:
 - NIK: Must be exactly 16 digits (numeric only)
 - Umur: Must be between 1-100 years
 - Jenis Kelamin: Cannot be "Pilih" (must select Laki-laki/Perempuan)
+- Input sanitization: All fields XSS-protected before saving
 
 
 4.5 TARIK DATA (DATA TABLE)
@@ -228,6 +258,8 @@ Form Validations:
 | Pagination       | 10 rows per page                         | P2       |
 +------------------+------------------------------------------+----------+
 
+Security: All table data is XSS-sanitized before rendering
+
 
 4.6 SIDEBAR NAVIGATION
 ----------------------
@@ -236,10 +268,29 @@ Form Validations:
 +------------------+-------------------+------------------+
 | Dashboard        | layout-dashboard  | All              |
 | Peta Sebaran     | map               | All              |
-| Input DBD        | file-plus         | Admin            |
-| Input Lainnya    | file-plus         | Admin            |
-| Tarik Data       | database          | Admin            |
+| Input DBD        | file-plus         | Staff/Admin      |
+| Input Lainnya    | file-plus         | Staff/Admin      |
+| Tarik Data       | database          | Staff/Admin      |
+| Kelola Staff     | users             | Admin Only       |
 +------------------+-------------------+------------------+
+
+
+4.7 KELOLA STAFF (ADMIN ONLY)
+-----------------------------
++------------------+------------------------------------------+----------+
+| Feature          | Description                              | Priority |
++------------------+------------------------------------------+----------+
+| View All Staff   | Table showing all users                  | P0       |
+| Add New Staff    | Create user with role selection          | P0       |
+| Edit Staff       | Change user role (staff/admin)           | P0       |
+| Delete Staff     | Remove user (except primary admin)       | P0       |
++------------------+------------------------------------------+----------+
+
+Access Control:
+- Only admin role can access this menu
+- Primary admin (admin@kalijudan.com) cannot be deleted
+- All staff management actions logged for audit
+
 
 ================================================================================
 5. TECHNICAL ARCHITECTURE
@@ -250,20 +301,18 @@ TECH STACK:
 +------------------------+-------------------+---------------+
 | Layer                  | Technology        | Version       |
 +------------------------+-------------------+---------------+
-| Frontend Framework     | Vanilla JS        | -             |
-| UI Library             | Tailwind CSS      | 3.4.17        |
+| Frontend Framework     | Vanilla JS        | ES6+          |
+| UI Library             | Tailwind CSS      | 3.4.17 (CDN)  |
 | Icons                  | Lucide Icons      | 0.263.0       |
 | Charts                 | Chart.js          | 4.4.0         |
 | Maps                   | Leaflet.js        | 1.9.4         |
-| Map Tiles              | OpenStreetMap     | -             |
+| Map Tiles              | CARTO Positron    | Free          |
+| Geocoding              | Nominatim OSM     | Free          |
+| Backend                | Firebase Firestore| Latest        |
+| Authentication         | Firebase Auth     | Latest        |
+| Cloud Functions        | Firebase Functions| Node 18       |
 | Fonts                  | Plus Jakarta Sans | Google Fonts  |
-| Backend SDK            | Custom SDKs       | -             |
 +------------------------+-------------------+---------------+
-
-SDKs Used:
-- element_sdk.js (Element SDK for theming/customization)
-- data_sdk.js (Data SDK for CRUD operations)
-
 
 EXTERNAL DEPENDENCIES (CDN):
 ----------------------------
@@ -303,7 +352,9 @@ EXTERNAL DEPENDENCIES (CDN):
   keadaan_pulang: 'Sembuh' | 'Meninggal',
   igm: 'Reaktif' | 'Non',
   igg: 'Reaktif' | 'Non',
-  ns1: 'Reaktif' | 'Non'
+  ns1: 'Reaktif' | 'Non',
+  latitude: number (optional),
+  longitude: number (optional)
 }
 
 
@@ -319,11 +370,27 @@ EXTERNAL DEPENDENCIES (CDN):
   jenis_kelamin: 'Laki-laki' | 'Perempuan',
   alamat_domisili: string,
   kelurahan: string,
-  tanggal_pelaporan: date
+  rw: string (optional),
+  tanggal_pelaporan: date,
+  latitude: number (optional),
+  longitude: number (optional)
 }
 
 
-6.3 DISEASE COLOR CODING
+6.3 USER STRUCTURE
+------------------
+{
+  id: string,
+  email: string,
+  nama: string,
+  role: 'admin' | 'staff',
+  uid: string (Firebase Auth UID),
+  created_at: timestamp,
+  created_by: string
+}
+
+
+6.4 DISEASE COLOR CODING
 ------------------------
 +-------------+------------+----------+
 | Disease     | Color      | Hex      |
@@ -335,7 +402,7 @@ EXTERNAL DEPENDENCIES (CDN):
 +-------------+------------+----------+
 
 
-6.4 GLOBAL STATE VARIABLES
+6.5 GLOBAL STATE VARIABLES
 --------------------------
 - allData: [] (Array of all disease records)
 - isLoggedIn: false (Boolean)
@@ -347,6 +414,8 @@ EXTERNAL DEPENDENCIES (CDN):
 - sdkReady: false (Boolean)
 - map: null (Leaflet map instance)
 - mapMarkers: {} (Object)
+- inactivityTimer: null (Inactivity timeout)
+- warningTimer: null (Warning modal timer)
 
 
 ================================================================================
@@ -380,27 +449,77 @@ REPORTING REQUIREMENTS:
 
 AUTHENTICATION:
 ---------------
-- Username/password minimum 6 characters
-- Session timeout after 30 minutes inactive
+- Email/password minimum 6 characters
+- Session persistence: browserSessionPersistence (auto-logout on tab close)
+- Inactivity timeout: 15 minutes with 2-minute warning modal
 - Password reset via security question (answer: 'kalijudan')
+- Token stored in session, not localStorage (prevents token theft)
+
+
+ROLE-BASED ACCESS CONTROL:
+---------------------------
++-------+----------+-----+-------+--------+--------+-----------+
+| Role  | Dashboard| Map | Input | Delete | Export | Kelola S. |
++-------+----------+-----+-------+--------+--------+-----------+
+| Admin | Yes      | Yes | Yes   | Yes    | Yes    | Yes       |
+| Staff | Yes      | Yes | Yes   | Yes    | Yes    | No        |
+| Guest | View Only| View Only | No | No  | Yes    | No        |
++-------+----------+-----+-------+--------+--------+-----------+
+
+Role Storage: Firestore Database (field: role in users collection)
+Role Assignment: Admin only (via Kelola Staff feature)
 
 
 DATA PROTECTION:
 ----------------
+- Firestore Security Rules: Server-side access control
 - Client-side validation for all inputs
-- Required field validation
-- NIK uniqueness check (recommended)
-- Delete confirmation modal
+- XSS protection: All user inputs sanitized before save/render
+- NIK uniqueness check via Firestore Rules
+- Delete confirmation modal for all destructive actions
+- Input sanitization functions: escapeHtml(), sanitizeData()
+
+
+FIRESTORE SECURITY RULES:
+-------------------------
+Collection 'cases':
+- read: public (for dashboard/map visibility)
+- create: authenticated staff/admin only
+- update: authenticated staff/admin only
+- delete: admin only
+- validation: disease_type, NIK format, umur range, etc.
+
+Collection 'users':
+- read: authenticated users (for role lookup)
+- create: admin only
+- update: admin only (users cannot change own role)
+- delete: admin only
+
+
+XSS PROTECTION:
+---------------
+- escapeHtml(): Converts < > " ' & / ` = to HTML entities
+- sanitizeData(): Applies escapeHtml to all object properties
+- Applied to:
+  * All form submissions (DBD, Lainnya)
+  * Data table rendering
+  * Map popups
+  * Staff table rendering
+- Prevents script injection, event handler injection, etc.
 
 
 ACCESS CONTROL MATRIX:
 ----------------------
-+-------+----------+-----+-------+--------+--------+
-| Role  | Dashboard| Map | Input | Delete | Export |
-+-------+----------+-----+-------+--------+--------+
-| Admin | Yes      | Yes | Yes   | Yes    | Yes    |
-| Guest | View Only| View Only | No | No  | Yes    |
-+-------+----------+-----+-------+--------+--------+
+Feature                  | Guest | Staff | Admin
+-------------------------|-------|-------|-------
+View Dashboard           | Yes   | Yes   | Yes
+View Peta Sebaran        | Yes   | Yes   | Yes
+Input DBD                | No    | Yes   | Yes
+Input Lainnya            | No    | Yes   | Yes
+Tarik Data               | No    | Yes   | Yes
+Delete Cases             | No    | No    | Yes
+Kelola Staff             | No    | No    | Yes
+Export CSV               | Yes   | Yes   | Yes
 
 
 ================================================================================
@@ -435,6 +554,15 @@ ACCESSIBILITY:
 - Screen reader friendly
 
 
+INACTIVITY WARNING UI:
+----------------------
+- Warning modal appears 2 minutes before timeout
+- Countdown timer shows remaining time (MM:SS format)
+- Two buttons: "Tetap Masuk" (reset timer) or "Keluar" (logout)
+- Modal styled with amber/warning theme
+- Consistent with application design system
+
+
 ================================================================================
 10. BROWSER SUPPORT
 ================================================================================
@@ -455,8 +583,8 @@ ACCESSIBILITY:
 11. ROADMAP
 ================================================================================
 
-PHASE 1 - MVP (Current - March 2026)
-------------------------------------
+PHASE 1 - MVP (Completed - March 2026)
+--------------------------------------
 [x] Login & Guest Access
 [x] Dashboard with charts
 [x] Distribution map (Leaflet)
@@ -464,17 +592,29 @@ PHASE 1 - MVP (Current - March 2026)
 [x] Data Table & Export CSV
 
 
-PHASE 2 - Enhancement (Q2 2026)
--------------------------------
-[ ] User management (multi-user)
+PHASE 2 - Security & Enhancement (Completed - April 2026)
+---------------------------------------------------------
+[x] Firestore Security Rules
+[x] Session persistence (auto-logout on tab close)
+[x] Inactivity timeout (15 min with warning)
+[x] XSS protection (input sanitization)
+[x] Role-based access control (Admin/Staff/Guest)
+[x] Kelola Staff feature (Admin only)
+[x] Geocoding integration (Nominatim OSM)
+
+
+PHASE 3 - Advanced Features (Q2 2026)
+-------------------------------------
 [ ] Edit data functionality
 [ ] Print-friendly reports
 [ ] WhatsApp notification integration
 [ ] SMS gateway for DBD alerts
+[ ] Firebase Custom Claims (Cloud Functions)
+[ ] Audit logging for all actions
 
 
-PHASE 3 - Advanced (Q3 2026)
-----------------------------
+PHASE 4 - Future (Q3 2026)
+--------------------------
 [ ] Predictive analytics (trend prediction)
 [ ] Heat map for hotspot areas
 [ ] Mobile app (PWA)
@@ -488,18 +628,19 @@ PHASE 3 - Advanced (Q3 2026)
 
 CONSTRAINTS:
 ------------
-1. Data Limit: Maximum 999 entries (hardcoded limit)
-2. No Backend: Using custom SDK (element_sdk.js, data_sdk.js)
+1. Firebase Spark Plan: Cloud Functions require Blaze plan upgrade (optional)
+2. Geocoding: Nominatim OSM has usage policy (1 request/sec)
 3. Single Location: Only for Puskesmas Kalijudan
 4. No Image Upload: No patient photo upload feature
 
 
 ASSUMPTIONS:
 ------------
-1. Internet connection available for map tiles (OpenStreetMap)
+1. Internet connection available for map tiles and Firebase
 2. Browser supports modern JavaScript (ES6+)
 3. User has basic computer literacy
-4. Data SDK provides persistence layer
+4. Firestore provides persistence layer
+5. Admin user is trusted (no sign-up for general public)
 
 
 ================================================================================
@@ -508,46 +649,78 @@ ASSUMPTIONS:
 
 DASHBOARD:
 ----------
-[ ] Display 4 stat cards with real-time case counts
-[ ] Bar chart shows disease tabulation
-[ ] Kelurahan chart shows distribution per village
-[ ] Line chart shows 12-month trend
-[ ] Data auto-updates after new input
+[x] Display 4 stat cards with real-time case counts
+[x] Bar chart shows disease tabulation
+[x] Kelurahan chart shows distribution per village
+[x] Line chart shows 12-month trend
+[x] Data auto-updates after new input
 
 
 DISTRIBUTION MAP:
 -----------------
-[ ] Leaflet map renders correctly
-[ ] 3 kelurahan markers appear at correct locations
-[ ] Click marker shows popup with case details
-[ ] Disease filter works (All/DBD/Hepatitis/Diare/TBC)
-[ ] Color legend matches diseases
+[x] Leaflet map renders correctly
+[x] 3 kelurahan polygons with accurate boundaries
+[x] Case markers appear at correct locations
+[x] Click marker shows popup with case details
+[x] Disease filter works (All/DBD/Hepatitis/Diare/TBC)
+[x] Color legend matches diseases
+[x] Polygon intensity based on case count
 
 
 INPUT DATA:
 -----------
-[ ] DBD form with 19 complete fields
-[ ] Other diseases form with 8 fields
-[ ] Validation for required fields
-[ ] Success toast after save
-[ ] Form resets after successful submit
+[x] DBD form with 19 complete fields
+[x] Other diseases form with 8-9 fields
+[x] Validation for required fields
+[x] NIK validation (16 digits)
+[x] Umur validation (1-100 years)
+[x] Success toast after save
+[x] Form resets after successful submit
+[x] Auto-geocoding for address (Nominatim OSM)
+[x] All inputs XSS-sanitized before save
 
 
 DATA TABLE:
 -----------
-[ ] Table displays all data
-[ ] Filter per disease works
-[ ] Delete button (admin only) with confirmation
-[ ] Export CSV downloads filtered data
-[ ] Empty state if no data
+[x] Table displays all data
+[x] Filter per disease works
+[x] Delete button (admin only) with confirmation
+[x] Export CSV downloads filtered data
+[x] Empty state if no data
+[x] All data XSS-sanitized before rendering
 
 
 AUTHENTICATION:
 ---------------
-[ ] Login with admin/admin123 succeeds
-[ ] Guest button opens dashboard (view only)
-[ ] Forgot password with security question works
-[ ] Logout returns to login page
+[x] Login with email/password succeeds
+[x] Personalized welcome message (Halo [Nama])
+[x] Guest button opens dashboard (view only)
+[x] Forgot password with security question works
+[x] Logout returns to login page
+[x] Session auto-logout when tab closed
+[x] Inactivity timeout (15 min) with warning modal
+[x] Role correctly assigned from Firestore
+
+
+KELOLA STAFF:
+-------------
+[x] Admin can view all staff
+[x] Admin can add new staff with role selection
+[x] Admin can edit staff role
+[x] Admin can delete staff (except primary admin)
+[x] Staff cannot access Kelola Staff menu
+[x] All staff actions logged
+
+
+SECURITY:
+---------
+[x] Firestore Security Rules deployed
+[x] XSS protection on all user inputs
+[x] Input sanitization before save and render
+[x] Session persistence (no localStorage token)
+[x] Inactivity timeout implemented
+[x] Role-based UI access control
+[x] Firestore validation rules (NIK, disease_type, etc.)
 
 
 ================================================================================
@@ -581,13 +754,25 @@ Technical Support: [Support Email]
 |           |               | - Guest users: disease name only |          |
 |           |               | - Admin users: full patient info |          |
 |           |               | - Optional geocoding for exact   |          |
-|           |               |   location (Google Maps API)     |          |
+|           |               |   location (Nominatim OSM)       |          |
 |           |               | - NIK validation: 16 digits only |          |
 |           |               | - Umur validation: 1-100 years   |          |
 |           |               | - Jenis Kelamin: required select |          |
 |           |               | - RW/RT field added to forms     |          |
 |           |               | - Numeric-only input for NIK     |          |
 |           |               |   and Umur fields                |          |
+| 1.0.4     | Apr 6, 2026   | Security enhancements:           | -        |
+|           |               | - Firestore Security Rules       |          |
+|           |               | - Session persistence (auto-     |          |
+|           |               |   logout on tab close)           |          |
+|           |               | - Inactivity timeout (15 min)    |          |
+|           |               |   with 2-min warning modal       |          |
+|           |               | - XSS protection (input          |          |
+|           |               |   sanitization)                  |          |
+|           |               | - Role-based access control      |          |
+|           |               | - Kelola Staff feature (Admin)   |          |
+|           |               | - Optimized Firestore queries    |          |
+|           |               | - Personalized login greeting    |          |
 +-----------+---------------+----------------------------------+----------+
 
 
@@ -596,6 +781,7 @@ DOCUMENT INFO
 ================================================================================
 
 Created: March 30, 2026
+Last Updated: April 6, 2026
 Status: Approved for Production
 Classification: Internal Use Only
 
