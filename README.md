@@ -5,7 +5,7 @@
 [![Status](https://img.shields.io/badge/status-production%20ready-green.svg)](https://siperti-kalijudan.vercel.app)
 [![License](https://img.shields.io/badge/license-internal%20use-red.svg)](LICENSE)
 
-SIPERTI adalah sistem informasi berbasis web untuk pencatatan dan visualisasi data penyakit secara real-time di Puskesmas Kalijudan, Kecamatan Mulyorejo, Surabaya.
+SIPERTI adalah sistem informasi berbasis web untuk pencatatan dan visualisasi data penyakit menular secara real-time di Puskesmas Kalijudan, Kecamatan Mulyorejo, Surabaya.
 
 ---
 

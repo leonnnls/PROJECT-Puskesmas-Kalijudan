@@ -1,6 +1,6 @@
 ================================================================================
                     PRODUCT REQUIREMENTS DOCUMENT (PRD)
-                    SIPERTI - Sistem Informasi Penyakit Real Time
+                    SIPERTI - Sistem Informasi Penyakit Menular Real Time
                     Puskesmas Kalijudan
 ================================================================================
 
@@ -32,7 +32,7 @@ TABLE OF CONTENTS
 1. EXECUTIVE SUMMARY
 ================================================================================
 
-Product Name      : SIPERTI (Sistem Informasi Penyakit Real Time)
+Product Name      : SIPERTI (Sistem Informasi Penyakit Menular Real Time)
 Client            : Puskesmas Kalijudan, Kecamatan Mulyorejo
 Application Type  : Web-based Health Information System
 Platform          : Browser (Desktop & Mobile)
