@@ -110,6 +110,15 @@ input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 2px #2563e
        <button onclick="logout()" class="text-xs text-red-400 hover:text-red-300">Keluar</button>
       </div>
      </div>
+     <div id="guestInfo" class="p-3 border-t border-slate-700/50 hidden">
+      <div class="flex items-center justify-between px-3 py-2">
+       <div class="flex flex-col">
+        <span class="text-xs text-white font-600"><i data-lucide="user" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px"></i>Guest</span>
+        <span class="text-[10px] text-slate-400">Mode Lihat Saja</span>
+       </div>
+       <button onclick="logout()" class="text-xs text-slate-400 hover:text-white">Keluar</button>
+      </div>
+     </div>
     </aside><!-- CONTENT -->
     <main class="flex-1 overflow-auto bg-slate-50">
      <!-- DASHBOARD -->
@@ -605,6 +614,7 @@ function initAuth() {
       }
       
       document.getElementById('userInfo').classList.remove('hidden');
+      document.getElementById('guestInfo').classList.add('hidden');
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('mainApp').classList.remove('hidden');
       lucide.createIcons();
@@ -653,6 +663,7 @@ function setupLoginForm() {
       document.getElementById('staffNav').classList.add('hidden');
       document.getElementById('adminOnlyNav').classList.add('hidden');
       document.getElementById('userInfo').classList.add('hidden');
+      document.getElementById('guestInfo').classList.remove('hidden');
       
       // Collapse sidebar for guest users (default collapsed)
       sidebarCollapsed = true;
@@ -717,6 +728,7 @@ window.logout = async function() {
   await firebaseLogout();
   document.getElementById('mainApp').classList.add('hidden');
   document.getElementById('loginPage').classList.remove('hidden');
+  document.getElementById('guestInfo').classList.add('hidden');
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
   if(dataUnsubscribe) dataUnsubscribe();
