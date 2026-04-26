@@ -123,8 +123,8 @@ Goal: Quick information without login
 +------------------+------------------------------------------+----------+
 
 Default Credentials:
-- Email: admin@kalijudan.com
-- Password: admin123
+- Email: [REDACTED]
+- Password: [REDACTED]
 
 Session Behavior:
 - Token stored in session (not localStorage)
@@ -288,7 +288,7 @@ Security: All table data is XSS-sanitized before rendering
 
 Access Control:
 - Only admin role can access this menu
-- Primary admin (admin@kalijudan.com) cannot be deleted
+- Primary admin cannot be deleted
 - All staff management actions logged for audit
 
 
@@ -452,7 +452,7 @@ AUTHENTICATION:
 - Email/password minimum 6 characters
 - Session persistence: browserSessionPersistence (auto-logout on tab close)
 - Inactivity timeout: 15 minutes with 2-minute warning modal
-- Password reset via security question (answer: 'kalijudan')
+- Password reset via security question
 - Token stored in session, not localStorage (prevents token theft)
 
 
@@ -498,7 +498,7 @@ Collection 'users':
 
 XSS PROTECTION:
 ---------------
-- escapeHtml(): Converts < > " ' & / ` = to HTML entities
+- escapeHtml(): Converts symbols to HTML entities
 - sanitizeData(): Applies escapeHtml to all object properties
 - Applied to:
   * All form submissions (DBD, Lainnya)
@@ -693,7 +693,7 @@ DATA TABLE:
 AUTHENTICATION:
 ---------------
 [x] Login with email/password succeeds
-[x] Personalized welcome message (Halo [Nama])
+[x] Personalized welcome message
 [x] Guest button opens dashboard (view only)
 [x] Forgot password with security question works
 [x] Logout returns to login page
@@ -728,8 +728,8 @@ SECURITY:
 ================================================================================
 
 Product Owner    : Puskesmas Kalijudan
-Developer        : [Your Name]
-Technical Support: [Support Email]
+Developer        : [REDACTED]
+Technical Support: [REDACTED]
 
 
 ================================================================================
@@ -741,38 +741,9 @@ Technical Support: [Support Email]
 +-----------+---------------+----------------------------------+----------+
 | 1.0.0     | Mar 30, 2026  | Initial Release                  | -        |
 | 1.0.1     | Mar 30, 2026  | Map upgrade (SVG to Leaflet)     | -        |
-| 1.0.2     | Mar 30, 2026  | Map improvements:                | -        |
-|           |               | - Polygon boundaries from Google |          |
-|           |               |   My Maps KML (44-50 vertices)   |          |
-|           |               | - Remove marker pins             |          |
-|           |               | - Base layer: CARTO Positron     |          |
-|           |               | - Centered view [-7.2620,112.7950]|         |
-|           |               | - Dynamic intensity coloring     |          |
-| 1.0.3     | Mar 30, 2026  | Major enhancements:              | -        |
-|           |               | - Case markers on map (colored   |          |
-|           |               |   dots per disease type)         |          |
-|           |               | - Guest users: disease name only |          |
-|           |               | - Admin users: full patient info |          |
-|           |               | - Optional geocoding for exact   |          |
-|           |               |   location (Nominatim OSM)       |          |
-|           |               | - NIK validation: 16 digits only |          |
-|           |               | - Umur validation: 1-100 years   |          |
-|           |               | - Jenis Kelamin: required select |          |
-|           |               | - RW/RT field added to forms     |          |
-|           |               | - Numeric-only input for NIK     |          |
-|           |               |   and Umur fields                |          |
-| 1.0.4     | Apr 6, 2026   | Security enhancements:           | -        |
-|           |               | - Firestore Security Rules       |          |
-|           |               | - Session persistence (auto-     |          |
-|           |               |   logout on tab close)           |          |
-|           |               | - Inactivity timeout (15 min)    |          |
-|           |               |   with 2-min warning modal       |          |
-|           |               | - XSS protection (input          |          |
-|           |               |   sanitization)                  |          |
-|           |               | - Role-based access control      |          |
-|           |               | - Kelola Staff feature (Admin)   |          |
-|           |               | - Optimized Firestore queries    |          |
-|           |               | - Personalized login greeting    |          |
+| 1.0.2     | Mar 30, 2026  | Map improvements                 | -        |
+| 1.0.3     | Mar 30, 2026  | Major enhancements               | -        |
+| 1.0.4     | Apr 6, 2026   | Security enhancements            | -        |
 +-----------+---------------+----------------------------------+----------+
 
 
